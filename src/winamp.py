@@ -1,4 +1,4 @@
-#    Copyright (C) 2008 Yaron Inger, http://ingeration.blogspot.com
+#    Copyright (C) 2009 Yaron Inger, http://ingeration.blogspot.com
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -14,6 +14,14 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #    or download it from http://www.gnu.org/licenses/gpl.txt
+
+#    Revision History:
+#
+#    11/05/2008 Version 0.1
+#    	- Initial release
+#
+#    31/12/2009 Version 0.2
+#    	- Added support for keyword queries (queryAsKeyword)
 
 from ctypes import *
 import win32api, win32con, win32gui, win32process, pywintypes
@@ -47,9 +55,13 @@ class Winamp(object):
 	IPC_GETPLAYLISTTITLE = 212
 	# next playlist track
 	IPC_GET_NEXT_PLITEM = 361
+	# current playing title
+	IPC_GET_PLAYING_TITLE = 3034
 
 	# runs an ml query
 	ML_IPC_DB_RUNQUERY = 0x0700
+	# runs an ml query as a string
+	ML_IPC_DB_RUNQUERY_SEARCH = 0x0701
 	# frees ml query results from winamp's memory
 	ML_IPC_DB_FREEQUERYRESULTS = 0x0705
 
@@ -166,10 +178,10 @@ class Winamp(object):
 		# get important Winamp's window handles
 		try:
 			self.__mainWindowHWND = self.__findWindow([("Winamp v1.x", None)])
-			self.__playlistHWND = self.__findWindow([("BaseWindow_RootWnd", "Main Window"), 
+			self.__playlistHWND = self.__findWindow([("BaseWindow_RootWnd", None), 
 			("BaseWindow_RootWnd", "Playlist Editor"), 
 			("Winamp PE", "Winamp Playlist Editor")])
-			self.__mediaLibraryHWND = self.__findWindow([("BaseWindow_RootWnd", "Main Window"), 
+			self.__mediaLibraryHWND = self.__findWindow([("BaseWindow_RootWnd", None), 
 			("BaseWindow_RootWnd", "Winamp Library"), 
 			("Winamp Gen", "Winamp Library"), (None, None)])
 		except pywintypes.error, e:
@@ -226,10 +238,16 @@ class Winamp(object):
 			except AttributeError:
 				raise AttributeError, attr
 
-	def __readStringFromMemory(self, address):
+	def __readStringFromMemory(self, address, isUnicode = False):
 		"""Reads a string from Winamp's memory address space."""
 
-		buffer = create_string_buffer(win32con.MAX_PATH)
+		if isUnicode:
+			bufferLength = win32con.MAX_PATH * 2
+			buffer = create_unicode_buffer(bufferLength * 2)
+		else:
+			bufferLength = win32con.MAX_PATH
+			buffer = create_string_buffer(bufferLength)
+
 		bytesRead = c_ulong(0)
 
 		"""Note: this is quite an ugly hack, because we assume the string will have a maximum
@@ -240,7 +258,7 @@ class Winamp(object):
 			2. Reading one byte at a time. (?)
 			3. Use CreateRemoteThread to run strlen on Winamp's process.
 		"""
-		windll.kernel32.ReadProcessMemory(self.__hProcess, address, buffer, win32con.MAX_PATH, byref(bytesRead))
+		windll.kernel32.ReadProcessMemory(self.__hProcess, address, buffer, bufferLength, byref(bytesRead))
 
 		return buffer.value
 	
@@ -262,10 +280,10 @@ class Winamp(object):
 							 0,
 							 addressof(cds))
 
-	def query(self, queryString):
+	def query(self, queryString, queryType = ML_IPC_DB_RUNQUERY):
 		"""Queries Winamp's media library and returns a list of items matching the query.
 		
-		The query can be just a keyword, like 'alice', or can include filters like 'artist has \'alice\''.
+		The query should include filters like '?artist has \'alice\''.
 		For more information, consult your local Winamp forums or media library.
 		"""
 		queryStringAddr = self.__copyDataToWinamp(queryString)
@@ -276,7 +294,7 @@ class Winamp(object):
 		queryStructAddr = self.__copyDataToWinamp(queryStruct)
 
 		# run query
-		win32api.SendMessage(self.__mediaLibraryHWND, self.WM_ML_IPC, queryStructAddr, self.ML_IPC_DB_RUNQUERY)
+		win32api.SendMessage(self.__mediaLibraryHWND, self.WM_ML_IPC, queryStructAddr, queryType)
 
 		receivedQuery = self.__readDataFromWinamp(queryStructAddr, self.mlQueryStruct)
 
@@ -296,6 +314,15 @@ class Winamp(object):
 		win32api.SendMessage(self.__mediaLibraryHWND, self.WM_ML_IPC, queryStructAddr, self.ML_IPC_DB_FREEQUERYRESULTS)
 
 		return items
+	
+	def queryAsKeyword(self, queryString):
+		"""Queries Winamp's media library and returns a list of items matching the query.
+		
+		The query should be a keyword, like 'alice' (then the query is then treated as a string query).
+		This makes Winamp search the requested keyword in every data field in the media library database
+		(such as Artist, Album, Track Name, ...).
+		"""
+		return self.query(queryString, self.ML_IPC_DB_RUNQUERY_SEARCH)
 	
 	def __copyDataToWinamp(self, data):
 		if type(data) is str:
@@ -391,6 +418,12 @@ class Winamp(object):
 
 		self.__sendUserMessage(volume, self.IPC_SETVOLUME)
 	
+	def getCurrentPlayingTitle(self):
+		"""Returns the title of the current playing track"""
+		address = self.__sendUserMessage(0, self.IPC_GET_PLAYING_TITLE)
+
+		return self.__readStringFromMemory(address, True)
+	
 	def getPlaylistFile(self, position):
 		"""Returns the filename of the current selected file in the playlist."""
 		address = self.__sendUserMessage(position, self.IPC_GETPLAYLISTFILE)
@@ -452,7 +485,7 @@ def printMediaLibraryItem(item):
 
 if __name__ == "__main__":
 	# little demonstration...
-
+	
 	w = Winamp()
 
 	print "Current playlist:"
