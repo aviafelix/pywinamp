@@ -22,6 +22,9 @@
 #
 #    31/12/2009 Version 0.2
 #    	- Added support for keyword queries (queryAsKeyword)
+#
+#    16/02/2017 Version 0.23
+#    	- Converted source to Python 3
 
 from ctypes import *
 import win32api, win32con, win32gui, win32process, pywintypes
@@ -178,19 +181,25 @@ class Winamp(object):
 		# get important Winamp's window handles
 		try:
 			self.__mainWindowHWND = self.__findWindow([("Winamp v1.x", None)])
-			self.__playlistHWND = self.__findWindow([("BaseWindow_RootWnd", None), 
-			("BaseWindow_RootWnd", "Playlist Editor"), 
-			("Winamp PE", "Winamp Playlist Editor")])
-			self.__mediaLibraryHWND = self.__findWindow([("BaseWindow_RootWnd", None), 
-			("BaseWindow_RootWnd", "Winamp Library"), 
-			("Winamp Gen", "Winamp Library"), (None, None)])
-		except pywintypes.error, e:
+			self.__playlistHWND = self.__findWindow([
+				("BaseWindow_RootWnd", None),
+				("BaseWindow_RootWnd", "Playlist Editor"),
+				("Winamp PE", "Winamp Playlist Editor"),
+			])
+			self.__mediaLibraryHWND = self.__findWindow([
+				("BaseWindow_RootWnd", None),
+				("BaseWindow_RootWnd", "Winamp Library"),
+				("Winamp Gen", "Winamp Library"),
+				(None, None),
+			])
+		except pywintypes.error as e:
 			raise RuntimeError("Cannot find Winamp windows. Is winamp started?")
 
 		self.__processID = win32process.GetWindowThreadProcessId(self.__mainWindowHWND)[1]
 
 		# open Winamp's process
 		self.__hProcess = windll.kernel32.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, self.__processID)
+		self.wid = self.__mainWindowHWND
 	
 	def detach(self):
 		"""Detaches from Winamp's process."""
@@ -213,7 +222,7 @@ class Winamp(object):
 		"""
 		currentWindow = None
 
-		for i in xrange(len(windowList)):
+		for i in range(len(windowList)):
 			if currentWindow is None:
 				currentWindow = win32gui.FindWindow(windowList[i][0], windowList[i][1])
 			else:
@@ -236,7 +245,7 @@ class Winamp(object):
 			try:
 				return object.__getattr__(self, attr)
 			except AttributeError:
-				raise AttributeError, attr
+				raise AttributeError(attr)
 
 	def __readStringFromMemory(self, address, isUnicode = False):
 		"""Reads a string from Winamp's memory address space."""
@@ -303,7 +312,7 @@ class Winamp(object):
 		buf = create_string_buffer(sizeof(self.itemRecord) * receivedQuery.itemRecordList.Size)
 		windll.kernel32.ReadProcessMemory(self.__hProcess, receivedQuery.itemRecordList.Items, buf, sizeof(buf), 0)
 
-		for i in xrange(receivedQuery.itemRecordList.Size):
+		for i in range(receivedQuery.itemRecordList.Size):
 			item = self.__readDataFromWinamp(receivedQuery.itemRecordList.Items + (sizeof(self.itemRecord) * i), self.itemRecord)
 
 			self.__fixRemoteStruct(item)
@@ -360,7 +369,7 @@ class Winamp(object):
 	def __fixRemoteStruct(self, structure):
 		offset = 0
 
-		for i in xrange(len(structure._fields_)):
+		for i in range(len(structure._fields_)):
 			(field_name, field_type) = structure._fields_[i]
 
 			if field_type is c_char_p or field_type is c_void_p:
@@ -481,15 +490,15 @@ class Winamp(object):
 		self.play()
 
 def printMediaLibraryItem(item):
-	print "Filename: %s\nTrack: %s, Album: %s, Artist: %s\nComment: %s, Genre: %s" % (item.filename, item.track, item.album, item.artist, item.comment, item.genre)
+	print("Filename: %s\nTrack: %s, Album: %s, Artist: %s\nComment: %s, Genre: %s" % (item.filename, item.track, item.album, item.artist, item.comment, item.genre))
 
 if __name__ == "__main__":
 	# little demonstration...
 	
 	w = Winamp()
 
-	print "Current playlist:"
-	print w.getPlaylistTitles()
+	print("Current playlist:")
+	print(w.getPlaylistTitles())
 
 	items = w.query("artist has \"opeth\"")
 	[printMediaLibraryItem(item) for item in items]
@@ -497,7 +506,7 @@ if __name__ == "__main__":
 	w.playlist = w.query("artist has \"jane's\"")
 	w.sortPlaylist()
 
-	print w.playlist
+	print(w.playlist)
 
 	"Playing album..."
 	w.playAlbum("Red")
