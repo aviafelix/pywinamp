@@ -182,14 +182,14 @@ class Winamp(object):
 		try:
 			self.__mainWindowHWND = self.__findWindow([("Winamp v1.x", None)])
 			self.__playlistHWND = self.__findWindow([
-				("BaseWindow_RootWnd", None),
-				("BaseWindow_RootWnd", "Playlist Editor"),
+				# ("BaseWindow_RootWnd", None),
+				# ("BaseWindow_RootWnd", "Playlist Editor"),
 				("Winamp PE", "Winamp Playlist Editor"),
 			])
 			self.__mediaLibraryHWND = self.__findWindow([
-				("BaseWindow_RootWnd", None),
-				("BaseWindow_RootWnd", "Winamp Library"),
-				("Winamp Gen", "Winamp Library"),
+				# ("BaseWindow_RootWnd", None),
+				# ("BaseWindow_RootWnd", "Winamp Library"),
+				# ("Winamp Gen", "Winamp Library"),
 				(None, None),
 			])
 		except pywintypes.error as e:
